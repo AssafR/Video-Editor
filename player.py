@@ -51,7 +51,8 @@ class Player:
         self.frame_no = None
         self.scale = None
         self.fps = None
-        self.img = None
+        self.img_left = None
+        self.img_right = None
         self.frame_p = None
         self.params_dic = {}
         self.length_frame = 0
@@ -72,7 +73,8 @@ class Player:
         self.op3 = None
 
         self.root = Tk()
-        self.canvas = None
+        self.left_canvas = None
+        self.right_canvas = None
         self.btn_start_trim = None
         self.btn_end_trim = None
         self.btn_convert = None
@@ -97,17 +99,22 @@ class Player:
 
     def player_main(self):
 
-        self.design_window('Video Editor', "1000x490", 'icon.ico')
+        self.design_window('Video Editor', "1500x490", 'icon.ico')
         s = ttk.Style()
 
         s.configure('TFrame', background='white')
         s.configure('TNotebook', background='white')
         s.configure('TScale', background='white')
         s.configure('TLabelframe', background='white')
-        self.canvas = Canvas(self.root,
-                             width=560, height=400,
-                             bg='black')
-        self.canvas.place(x=400, y=10)
+        self.left_canvas = Canvas(self.root,
+                                  width=560, height=400,
+                                  bg='black')
+        self.left_canvas.place(x=200, y=10)
+
+        self.right_canvas = Canvas(self.root,
+                                   width=560, height=400,
+                                   bg='black')
+        self.right_canvas.place(x=760, y=10)
 
         frame1 = ttk.LabelFrame(self.root, text='Frame Pos')
         frame1.place(x=100, y=420)
@@ -118,14 +125,16 @@ class Player:
                                orient='horizontal', value=0, state='disabled')
         self.scale.place(x=408, y=430)
 
-        self.img = PhotoImage(file='front.png')
-        self.canvas.create_image(0, 0, image=self.img, anchor=NW)
+        self.img_left = PhotoImage(file='left.png')
+        self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
+        self.img_right = PhotoImage(file='right.png')
+        self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
         self.fps = 25
 
         notebook = ttk.Notebook(self.root)
 
-        tab1 = ttk.Frame(notebook, width=380, height=380)
-        tab2 = ttk.Frame(notebook, width=380, height=380)
+        tab1 = ttk.Frame(notebook, width=180, height=380)
+        tab2 = ttk.Frame(notebook, width=180, height=380)
 
         self.Click = IntVar()
         self.Click.set(self.frame_list[0])
@@ -200,7 +209,7 @@ class Player:
 
             ret, self.frame = self.video.read()  # Read the frame
 
-            self.img = ImageTk.PhotoImage(
+            self.img_left = ImageTk.PhotoImage(
                 Image.fromarray(
                     cv2.cvtColor(
                         cv2.resize(
@@ -208,7 +217,18 @@ class Player:
                             (560, 400),
                             interpolation=cv2.INTER_CUBIC),
                         cv2.COLOR_BGR2RGB)))
-            self.canvas.create_image(0, 0, image=self.img, anchor=NW)
+            self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
+
+            self.img_right = ImageTk.PhotoImage(
+                Image.fromarray(
+                    cv2.cvtColor(
+                        cv2.resize(
+                            self.frame,
+                            (560, 400),
+                            interpolation=cv2.INTER_CUBIC),
+                        cv2.COLOR_BGR2HLS)))
+            self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
+
         except Exception as exception:
             pass
 
