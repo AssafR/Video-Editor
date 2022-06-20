@@ -200,6 +200,18 @@ class Player:
     def to_time(self, frame_number):
         return str(datetime.timedelta(seconds=frame_number / self.fps))
 
+    def prepare_to_present_image(self, opencv_frame):
+        return ImageTk.PhotoImage(
+            Image.fromarray(
+                cv2.resize(
+                    opencv_frame,
+                    (560, 400),
+                    interpolation=cv2.INTER_CUBIC)
+            ))
+
+    def process_image(self, img):
+        return cv2.flip(img, 1)
+
     def run_video(self, frame_number):
         # Called when a file is loaded and whenever an event causes change of frame (e.g. pressing left arrow).
         try:
@@ -208,25 +220,13 @@ class Player:
                            frame_number);  # 0-based index of the frame to be decoded/captured next.
 
             ret, self.frame = self.video.read()  # Read the frame
+            opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
 
-            self.img_left = ImageTk.PhotoImage(
-                Image.fromarray(
-                    cv2.cvtColor(
-                        cv2.resize(
-                            self.frame,
-                            (560, 400),
-                            interpolation=cv2.INTER_CUBIC),
-                        cv2.COLOR_BGR2RGB)))
+            self.img_left = self.prepare_to_present_image(opencv_frame_left)
             self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
 
-            self.img_right = ImageTk.PhotoImage(
-                Image.fromarray(
-                    cv2.cvtColor(
-                        cv2.resize(
-                            self.frame,
-                            (560, 400),
-                            interpolation=cv2.INTER_CUBIC),
-                        cv2.COLOR_BGR2HLS)))
+            opencv_frame_right = self.process_image(opencv_frame_left)
+            self.img_right = self.prepare_to_present_image(opencv_frame_right)
             self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
 
         except Exception as exception:
