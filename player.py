@@ -1,11 +1,12 @@
-import ffmpeg
-from tkinter import *
-from PIL import ImageTk, Image
-import tkinter.ttk as ttk
-from tkinter import filedialog
 import cv2
 import datetime
 import os
+import ffmpeg
+import tkinter.ttk as ttk
+
+from tkinter import *
+from PIL import ImageTk, Image
+from tkinter import filedialog
 import numpy as np
 
 
@@ -21,14 +22,15 @@ class Player:
         200
     ]
 
-    vc_list = [
+    ac_list = [
         'ac3',
         'ac3',
         'copy'
     ]
-    ac_list = [
+    vc_list = [
         'libx264',
         'libx264',
+        'libx265',
         'copy'
     ]
 
@@ -53,10 +55,21 @@ class Player:
         self.frame_p = None
         self.params_dic = {}
         self.length_frame = 0
-        self.video = None
+        self.video = None  # Will be filled with a cv2.VideoCapture object
+        self.Click = None
+        self.inp = None
+
+        self.vc_click = None
+        self.ac_click = None
+        self.crf_click = None
+        self.audio_click = None
 
         self.ffmpeg_a = None
         self.ffmpeg_v = None
+
+        self.op1 = None
+        self.op2 = None
+        self.op3 = None
 
         self.root = Tk()
         self.canvas = None
@@ -91,15 +104,15 @@ class Player:
         s.configure('TNotebook', background='white')
         s.configure('TScale', background='white')
         s.configure('TLabelframe', background='white')
-        self.canvas = Canvas(self.root
-                        , width=560
-                        , heigh=400,
-                        bg='black')
+        self.canvas = Canvas(self.root,
+                             width=560, height=400,
+                             bg='black')
         self.canvas.place(x=400, y=10)
 
-        frame1 = ttk.LabelFrame(self.root, text='Fram Pos')
-        frame1.place(x=10, y=420)
+        frame1 = ttk.LabelFrame(self.root, text='Frame Pos')
+        frame1.place(x=100, y=420)
 
+        # Defining a Scale (i.e. Slider widget in this case).
         self.scale = ttk.Scale(self.root, from_=0,
                                to=100, length=550,
                                orient='horizontal', value=0, state='disabled')
@@ -114,40 +127,46 @@ class Player:
         tab1 = ttk.Frame(notebook, width=380, height=380)
         tab2 = ttk.Frame(notebook, width=380, height=380)
 
-        Click = IntVar()
-        Click.set(self.frame_list[0])
-        op = ttk.OptionMenu(tab1, Click, self.frame_list, command=self.change_frame_p)
-        op.place(x=10, y=10)
-        vc_click = StringVar()
-        ac_click = StringVar()
-        crf_click = StringVar()
-        audio_click = IntVar()
-        self.scale.config(command=self.set_frame_no)
+        self.Click = IntVar()
+        self.Click.set(self.frame_list[0])
+        options_menu = ttk.OptionMenu(tab1, self.Click, self.frame_list, command=self.change_frame_p)
+        options_menu.place(x=10, y=10)
+        self.vc_click = StringVar()
+        self.ac_click = StringVar()
+        self.crf_click = StringVar()
+        self.audio_click = IntVar()
+
+        self.scale.config(command=self.set_frame_no)  # Set an event handler called upon changing the scale value
         # video_name is the video being called
         self.frame_no = 0
-        i = self.to_time(self.frame_no)
-        self.label = Label(frame1, text=i, bg='white')
+        frame_no_as_time_str = self.to_time(self.frame_no)
+        self.label = Label(frame1, text=frame_no_as_time_str, bg='yellow')
         self.label.pack()
+
         self.frame_p = 1
-        op1 = ttk.OptionMenu(tab1, vc_click, *self.vc_list, command=self.change_vc)
-        op1.place(x=63, y=10)
-        op2 = ttk.OptionMenu(tab1, ac_click, *self.ac_list, command=self.change_ac)
-        op2.place(x=123, y=10)
-        op3 = ttk.OptionMenu(tab1, crf_click, *self.crf_list, command=self.change_crf)
-        op3.place(x=203, y=10)
-        op3 = ttk.OptionMenu(tab1, audio_click, *self.audio_list, command=self.change_audio)
-        op3.place(x=10, y=50)
+        # Put all these menu selectors in place, 3 on top row and change_audio in bottom row.
+        self.op1 = ttk.OptionMenu(tab1, self.vc_click, *self.vc_list, command=self.change_vc)
+        self.op1.place(x=63, y=10)
+        self.op2 = ttk.OptionMenu(tab1, self.ac_click, *self.ac_list, command=self.change_ac)
+        self.op2.place(x=123, y=10)
+        self.op3 = ttk.OptionMenu(tab1, self.crf_click, *self.crf_list, command=self.change_crf)
+        self.op3.place(x=203, y=10)
+        self.op3 = ttk.OptionMenu(tab1, self.audio_click, *self.audio_list, command=self.change_audio)
+        self.op3.configure(state='disabled')
+        self.op3.place(x=10, y=50)
 
         notebook.add(tab1, text='Tab 1')
         notebook.add(tab2, text='Tab 2')
         notebook.place(x=10, y=10)
 
+        # Create all the widgets in tab2 and place them:
         self.btn_start_trim = ttk.Button(tab2, text='start trim', command=self.start_trim, state='disabled')
         self.btn_end_trim = ttk.Button(tab2, text='end trim', command=self.end_trim, state='disabled')
         self.btn_convert = ttk.Button(tab2, text='convert', command=self.convert_video, state='disabled')
         self.btn_start_trim.place(x=10, y=10)
         self.btn_end_trim.place(x=100, y=10)
         self.btn_convert.place(x=190, y=10)
+
         main_menu = Menu(self.root)
         self.root.config(menu=main_menu)
         menu = [
@@ -169,13 +188,16 @@ class Player:
 
         self.root.mainloop()
 
-    def to_time(self, fram_):
-        return str(datetime.timedelta(seconds=fram_ / self.fps))
+    def to_time(self, frame_number):
+        return str(datetime.timedelta(seconds=frame_number / self.fps))
 
     def run_video(self, frame_number):
+        # Called when a file is loaded and whenever an event causes change of frame (e.g. pressing left arrow).
         try:
-            self.label.config(text=self.to_time(frame_number))
-            self.video.set(cv2.CAP_PROP_POS_FRAMES, frame_number);  # Where frame_no is the frame you want
+            self.label.config(text=self.to_time(frame_number))  # Update the label
+            self.video.set(cv2.CAP_PROP_POS_FRAMES,
+                           frame_number);  # 0-based index of the frame to be decoded/captured next.
+
             ret, self.frame = self.video.read()  # Read the frame
 
             self.img = ImageTk.PhotoImage(
@@ -184,7 +206,7 @@ class Player:
                         cv2.resize(
                             self.frame,
                             (560, 400),
-                            interpolation=cv2.INTER_NEAREST),
+                            interpolation=cv2.INTER_CUBIC),
                         cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.img, anchor=NW)
         except Exception as exception:
@@ -203,8 +225,9 @@ class Player:
         self.frame_p = self.Click.get()
 
     def change_audio(self, event):
-        self.ffmpeg_a = self.inp[str('a:' + str(self.audio_click.get()))]
-        print(str('a:' + str(self.audio_click.get())))
+        if self.inp is not None:  # Temporary fix?
+            self.ffmpeg_a = self.inp[str('a:' + str(self.audio_click.get()))]
+            print(str('a:' + str(self.audio_click.get())))
 
     def move_video_right(self, event):
         if self.frame_no < self.length_frame:
@@ -228,12 +251,13 @@ class Player:
 
     def convert_video(self):
         out = filedialog.asksaveasfilename(defaultextension=".ts",
-                                           initialdir="c:",
+                                           initialdir="E:",
                                            title='save file')
         self.btn_end_trim.config(state='disabled')
         self.btn_start_trim.config(state='NORMAL')
         self.btn_convert.config(state='disabled')
-        outfile = ffmpeg.output(self.ffmpeg_a, self.ffmpeg_v, self.out, **self.params_dic)
+        outfile = ffmpeg.output(self.ffmpeg_a, self.ffmpeg_v, out, **self.params_dic)
+        # TODO: Doesn't support user cancel instead of save ...
         print(outfile.compile())
         if os.path.isfile(out):
             ffmpeg.run(outfile, overwrite_output=True, capture_stdout=True)
@@ -247,10 +271,11 @@ class Player:
                                                                     ("VLC file", "*.ts"),
                                                                     ("MP4 file", "*.mp4"),
                                                                     ("All file", "*.*")))
+        self.op3.configure(state='enabled')  # Since we have a file, can choose a change_audio value
         self.btn_start_trim.config(state='NORMAL')
-        inp = ffmpeg.input(self.root.file_name)
-        self.ffmpeg_a = inp['a']
-        self.ffmpeg_v = inp['v']
+        self.inp = ffmpeg.input(self.root.file_name)
+        self.ffmpeg_a = self.inp['a']
+        self.ffmpeg_v = self.inp['v']
         self.video = cv2.VideoCapture(self.root.file_name)
 
         self.fps = self.video.get(cv2.CAP_PROP_FPS)
@@ -261,5 +286,3 @@ class Player:
         self.scale.config(to=self.length_frame, value=0)
         self.scale.config(state='NORMAL')
         self.run_video(0)
-
-
