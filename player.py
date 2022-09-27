@@ -7,7 +7,7 @@ import tkinter.ttk as ttk
 from tkinter import *
 from PIL import ImageTk, Image
 from tkinter import filedialog
-import numpy as np
+from filters import flip_image
 
 
 class Player:
@@ -210,7 +210,7 @@ class Player:
             ))
 
     def process_image(self, img):
-        return cv2.flip(img, 1)
+        return flip_image(img)      
 
     def run_video(self, frame_number):
         # Called when a file is loaded and whenever an event causes change of frame (e.g. pressing left arrow).
