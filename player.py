@@ -75,6 +75,8 @@ class Player:
         self.root = Tk()
         self.left_canvas = None
         self.right_canvas = None
+        self.left_image_on_canvas = None
+        self.right_image_on_canvas = None
         self.btn_start_trim = None
         self.btn_end_trim = None
         self.btn_convert = None
@@ -126,9 +128,9 @@ class Player:
         self.scale.place(x=408, y=430)
 
         self.img_left = PhotoImage(file='left.png')
-        self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
+        self.left_image_on_canvas = self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
         self.img_right = PhotoImage(file='right.png')
-        self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
+        self.right_image_on_canvas = self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
         self.fps = 25
 
         notebook = ttk.Notebook(self.root)
@@ -187,8 +189,8 @@ class Player:
         main_menu.add_cascade(label='edit', menu=menu[1])
         main_menu.add_cascade(label='option', menu=menu[2])
 
-        menu[0].add_command(label='New', command=self.open_file)
-        menu[0].add_command(label='file')
+        menu[0].add_command(label='Open', command=self.open_file)
+        # menu[0].add_command(label='file')
         menu[0].add_command(label='Exit', command=self.root.destroy)
 
         # bind
@@ -200,14 +202,24 @@ class Player:
     def to_time(self, frame_number):
         return str(datetime.timedelta(seconds=frame_number / self.fps))
 
-    def prepare_to_present_image(self, opencv_frame):
+    def prepare_to_present_image(self, opencv_frame, width, height):
         return ImageTk.PhotoImage(
             Image.fromarray(
                 cv2.resize(
                     opencv_frame,
-                    (560, 400),
+                    (width, height),
                     interpolation=cv2.INTER_CUBIC)
-            ))
+            )
+        )
+
+    def update_canvas_with_frame(self, canvas, image_on_canvas, frame):
+        width, height = int(canvas['width']), int(canvas['height'])
+        img = self.prepare_to_present_image(frame, width, height)
+        # canvas.create_image(0, 0, image=img, anchor=NW)
+        canvas.itemconfig(image_on_canvas, image=img)
+        # canvas.update()
+        return img
+        # canvas.config(image=img)
 
     def process_image(self, img):
         return cv2.flip(img, 1)
@@ -217,19 +229,32 @@ class Player:
         try:
             self.label.config(text=self.to_time(frame_number))  # Update the label
             self.video.set(cv2.CAP_PROP_POS_FRAMES,
-                           frame_number);  # 0-based index of the frame to be decoded/captured next.
+                           frame_number)  # 0-based index of the frame to be decoded/captured next.
 
             ret, self.frame = self.video.read()  # Read the frame
             opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+            # to prevent the image garbage collected.
+            self.img_left = self.update_canvas_with_frame(self.left_canvas, self.left_image_on_canvas, opencv_frame_left)
+            # width, height = int(self.left_canvas['width']), int(self.left_canvas['height'])
+            # img = self.prepare_to_present_image(self.frame, width, height)
+            # img = self.img_right if (frame_number % 2 == 1) else img
+            # self.img_left = img
+            # # self.left_canvas.create_image(0, 0, image=img, anchor=NW)
+            # self.left_canvas.itemconfig(self.left_image_on_canvas, image=self.img_left)
+            #
 
-            self.img_left = self.prepare_to_present_image(opencv_frame_left)
-            self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
+            # self.img_left = self.prepare_to_present_image(opencv_frame_left)
+            # self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
 
             opencv_frame_right = self.process_image(opencv_frame_left)
-            self.img_right = self.prepare_to_present_image(opencv_frame_right)
-            self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
+            self.img_right = self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas, opencv_frame_right)
+
+            # self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas, opencv_frame_right)
+            # self.img_right = self.prepare_to_present_image(opencv_frame_right)
+            # self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
 
         except Exception as exception:
+            print(exception)
             pass
 
     def change_ac(self, event):
