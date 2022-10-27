@@ -9,6 +9,8 @@ from PIL import ImageTk, Image
 from tkinter import filedialog
 import numpy as np
 
+THRESHOLD = 5
+
 
 class Player:
     frame_list = [
@@ -215,13 +217,33 @@ class Player:
     def update_canvas_with_frame(self, canvas, image_on_canvas, frame):
         width, height = int(canvas['width']), int(canvas['height'])
         img = self.prepare_to_present_image(frame, width, height)
-        # canvas.create_image(0, 0, image=img, anchor=NW)
         canvas.itemconfig(image_on_canvas, image=img)
-        # canvas.update()
         return img
-        # canvas.config(image=img)
+
+    def find_dark_edges(self, img_gray, axis):
+        average_axis = np.average(img_gray, axis=axis)  # Average each column, shape: (1280,)
+        left_margin = np.argmin(average_axis <= THRESHOLD)
+        average_axis_reverse = average_axis[::-1]  # Reverse column order
+        left_margin_reverse = np.argmax(average_axis_reverse > THRESHOLD)
+        # Last small value to the left: average_axis[left_margin-1]
+        right_margin = len(average_axis_reverse) - left_margin_reverse - 1
+        # First small value to the right : average_axis[right_margin + 1]
+
+        left_margin  = left_margin  if left_margin>0 else None
+        right_margin = right_margin if right_margin<len(average_axis)-1 else None
+
+        return left_margin, right_margin
+
+    def calculate_crop_img(self, img):
+        axes = {'COLUMNS': 0, 'ROWS': 1}
+
+        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        left_margin, right_margin = self.find_dark_edges(img_gray, axes['COLUMNS'])
+        top_margin, bottom_margin = self.find_dark_edges(img_gray, axes['ROWS'])
+        return left_margin, right_margin,top_margin, bottom_margin
 
     def process_image(self, img):
+        print(self.calculate_crop_img(img))
         return cv2.flip(img, 1)
 
     def run_video(self, frame_number):
