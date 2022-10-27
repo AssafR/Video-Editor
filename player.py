@@ -9,6 +9,10 @@ from PIL import ImageTk, Image
 from tkinter import filedialog
 import numpy as np
 
+DEFAULT_HEIGHT = 400
+
+DEFAULT_WIDTH = 560
+
 THRESHOLD = 5
 
 
@@ -111,12 +115,12 @@ class Player:
         s.configure('TScale', background='white')
         s.configure('TLabelframe', background='white')
         self.left_canvas = Canvas(self.root,
-                                  width=560, height=400,
+                                  width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
                                   bg='black')
         self.left_canvas.place(x=200, y=10)
 
         self.right_canvas = Canvas(self.root,
-                                   width=560, height=400,
+                                   width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT,
                                    bg='black')
         self.right_canvas.place(x=760, y=10)
 
@@ -220,6 +224,28 @@ class Player:
         canvas.itemconfig(image_on_canvas, image=img)
         return img
 
+    def draw_rectangle_over_image(self, img, start_point, end_point):
+
+        # start_point = (5, 5)
+        # # Ending coordinate, here (220, 220)
+        # # represents the bottom right corner of rectangle
+        # end_point = (220, 220)
+        if start_point is None or end_point is None:
+            return img
+
+        color = (0, 255, 0)  # Green color in GRB
+
+        # Line thickness of 2 px
+        thickness = 3
+
+        # Using cv2.rectangle() method
+        # Draw a rectangle with blue line borders of thickness of 2 px
+        image = cv2.rectangle(img, start_point, end_point, color, thickness)
+
+        # # Displaying the image
+        # cv2.imshow(window_name, image)
+        return image
+
     def find_dark_edges(self, img_gray, axis):
         average_axis = np.average(img_gray, axis=axis)  # Average each column, shape: (1280,)
         left_margin = np.argmin(average_axis <= THRESHOLD)
@@ -229,8 +255,8 @@ class Player:
         right_margin = len(average_axis_reverse) - left_margin_reverse - 1
         # First small value to the right : average_axis[right_margin + 1]
 
-        left_margin  = left_margin  if left_margin>0 else None
-        right_margin = right_margin if right_margin<len(average_axis)-1 else None
+        left_margin = left_margin if left_margin > 0 else None
+        right_margin = right_margin if right_margin < len(average_axis) - 1 else None
 
         return left_margin, right_margin
 
@@ -240,11 +266,19 @@ class Player:
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         left_margin, right_margin = self.find_dark_edges(img_gray, axes['COLUMNS'])
         top_margin, bottom_margin = self.find_dark_edges(img_gray, axes['ROWS'])
-        return left_margin, right_margin,top_margin, bottom_margin
+        return left_margin, right_margin, top_margin, bottom_margin
 
     def process_image(self, img):
-        print(self.calculate_crop_img(img))
-        return cv2.flip(img, 1)
+        height, width, _ = img.shape  # e.g: (1080, 1920, 3)
+        left_margin, right_margin, top_margin, bottom_margin = self.calculate_crop_img(img)
+
+        new_img = img
+        new_img = self.draw_rectangle_over_image(new_img, (4, 4), (left_margin - 1, height - 1))
+        new_img = self.draw_rectangle_over_image(new_img, (right_margin, 0), (width - 1, height - 1))
+        new_img = self.draw_rectangle_over_image(new_img, (0, 0), (width - 1, top_margin - 1))
+        new_img = self.draw_rectangle_over_image(new_img, (0, bottom_margin - 1), (width - 1, height - 1))
+        # return cv2.flip(img, 1)
+        return new_img
 
     def run_video(self, frame_number):
         # Called when a file is loaded and whenever an event causes change of frame (e.g. pressing left arrow).
@@ -256,7 +290,8 @@ class Player:
             ret, self.frame = self.video.read()  # Read the frame
             opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
             # to prevent the image garbage collected.
-            self.img_left = self.update_canvas_with_frame(self.left_canvas, self.left_image_on_canvas, opencv_frame_left)
+            self.img_left = self.update_canvas_with_frame(self.left_canvas, self.left_image_on_canvas,
+                                                          opencv_frame_left)
             # width, height = int(self.left_canvas['width']), int(self.left_canvas['height'])
             # img = self.prepare_to_present_image(self.frame, width, height)
             # img = self.img_right if (frame_number % 2 == 1) else img
@@ -269,7 +304,8 @@ class Player:
             # self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
 
             opencv_frame_right = self.process_image(opencv_frame_left)
-            self.img_right = self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas, opencv_frame_right)
+            self.img_right = self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas,
+                                                           opencv_frame_right)
 
             # self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas, opencv_frame_right)
             # self.img_right = self.prepare_to_present_image(opencv_frame_right)
