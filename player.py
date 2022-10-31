@@ -59,6 +59,8 @@ class Player:
         self.fps = None
         self.img_left = None
         self.img_right = None
+        self.avg_frame = None
+        self.avg_variance = None
         self.frame_p = None
         self.params_dic = {}
         self.length_frame = 0
@@ -230,7 +232,10 @@ class Player:
         # # Ending coordinate, here (220, 220)
         # # represents the bottom right corner of rectangle
         # end_point = (220, 220)
-        if start_point is None or end_point is None:
+        if start_point[0] is None \
+                or start_point[1] is None \
+                or end_point[0] is None \
+                or end_point[1] is None:
             return img
 
         color = (0, 255, 0)  # Green color in GRB
@@ -247,6 +252,9 @@ class Player:
         return image
 
     def find_dark_edges(self, img_gray, axis):
+
+        # Note, if axis=1 then semantically left->top, right->bottom
+
         average_axis = np.average(img_gray, axis=axis)  # Average each column, shape: (1280,)
         left_margin = np.argmin(average_axis <= THRESHOLD)
         average_axis_reverse = average_axis[::-1]  # Reverse column order
@@ -260,6 +268,66 @@ class Player:
 
         return left_margin, right_margin
 
+    def find_dark_edges_or_subtitles(self, img_search, img_draw):
+        img_gray = cv2.cvtColor(img_search, cv2.COLOR_RGB2GRAY)
+
+        pct = np.percentile(img_gray, [5, 50, 95, 100], axis=1)
+        res = (pct[0] < 10) & ((pct[1] < 10) | (pct[1] < 20) | (pct[2] < 20) | (pct[2] > 150))
+        lines_numbers = [x[0] for x in np.argwhere(res)]
+        height, width = img_gray.shape  # e.g: (1080, 1920)
+
+        img_return = img_draw
+        for line in lines_numbers:
+            # points.append([0, line])
+            # points.append([width,line])
+            img_return = cv2.line(img_return, (0, line), (width - 1, line), (0, 255, 0), thickness=1)
+
+        # points = np.array(points, np.int32).reshape((-1, 1, 2))
+        #
+        # color = (0, 255, 0)
+        # thickness = 1
+        #
+        # img = cv2.polylines(img, [points], False, color, thickness)
+
+        return img_return  # img_search #
+
+    def calc_std_per_pixel(self, video, length_frame):
+        sum_frames = None
+        sum_variance = None
+        frame_step = 150
+
+        num_frames = 0
+        for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
+            video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
+            ret, frame = self.video.read()  # Read the frame
+            if not ret:
+                self.length_frame = frame_no - 1
+                break
+            if sum_frames is None:
+                sum_frames = np.zeros_like(frame).astype('float64')
+            self.label.config(text=self.to_time(frame_no))  # Update the label
+            num_frames = num_frames + 1
+            sum_frames = sum_frames + frame
+        self.avg_frame = (sum_frames / num_frames)
+
+        num_frames = 0
+        for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
+            video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
+            ret, frame = self.video.read()  # Read the frame
+            if not ret:
+                self.length_frame = frame_no - 1
+                break
+            if sum_variance is None:
+                sum_variance = np.zeros_like(frame).astype('float64')
+            self.label.config(text=self.to_time(frame_no))  # Update the label
+            num_frames = num_frames + 1
+            diff_from_avg = (frame - self.avg_frame)
+            diff_from_avg = diff_from_avg ** 2
+            sum_variance = sum_variance + diff_from_avg
+        self.avg_variance = (sum_variance / num_frames)
+
+        return self.avg_variance
+
     def calculate_crop_img(self, img):
         axes = {'COLUMNS': 0, 'ROWS': 1}
 
@@ -268,26 +336,37 @@ class Player:
         top_margin, bottom_margin = self.find_dark_edges(img_gray, axes['ROWS'])
         return left_margin, right_margin, top_margin, bottom_margin
 
-    def process_image(self, img):
+    def process_image_old(self, img):
         height, width, _ = img.shape  # e.g: (1080, 1920, 3)
         left_margin, right_margin, top_margin, bottom_margin = self.calculate_crop_img(img)
+        print(left_margin, right_margin, top_margin, bottom_margin)
 
         new_img = img
-        new_img = self.draw_rectangle_over_image(new_img, (4, 4), (left_margin - 1, height - 1))
-        new_img = self.draw_rectangle_over_image(new_img, (right_margin, 0), (width - 1, height - 1))
-        new_img = self.draw_rectangle_over_image(new_img, (0, 0), (width - 1, top_margin - 1))
-        new_img = self.draw_rectangle_over_image(new_img, (0, bottom_margin - 1), (width - 1, height - 1))
-        # return cv2.flip(img, 1)
+        new_img = self.draw_rectangle_over_image(new_img, (4, 4), (left_margin, height))
+        new_img = self.draw_rectangle_over_image(new_img, (right_margin, 0), (width, height))
+        new_img = self.draw_rectangle_over_image(new_img, (0, 0), (width, top_margin))
+        new_img = self.draw_rectangle_over_image(new_img, (0, bottom_margin), (width, height))
         return new_img
+
+    def process_image_flip(self, img):
+        return cv2.flip(img, 1)
+
+    def process_image(self, img):
+        img_new = self.find_dark_edges_or_subtitles(img)
+        return img_new
 
     def run_video(self, frame_number):
         # Called when a file is loaded and whenever an event causes change of frame (e.g. pressing left arrow).
+        # self.img_right = self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas,
+        #                                                avg_frame)
+
         try:
             self.label.config(text=self.to_time(frame_number))  # Update the label
             self.video.set(cv2.CAP_PROP_POS_FRAMES,
                            frame_number)  # 0-based index of the frame to be decoded/captured next.
-
             ret, self.frame = self.video.read()  # Read the frame
+            if not ret:
+                return False
             opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
             # to prevent the image garbage collected.
             self.img_left = self.update_canvas_with_frame(self.left_canvas, self.left_image_on_canvas,
@@ -303,13 +382,23 @@ class Player:
             # self.img_left = self.prepare_to_present_image(opencv_frame_left)
             # self.left_canvas.create_image(0, 0, image=self.img_left, anchor=NW)
 
-            opencv_frame_right = self.process_image(opencv_frame_left)
-            self.img_right = self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas,
-                                                           opencv_frame_right)
+            # avg_frame = self.avg_frame.astype('uint8')
+            # opencv_frame_right = self.process_image_flip(self.process_image_flip(avg_frame)).astype('uint8')
+            # np.sum(self.avg_variance,axis=2).shape
+            avg_variance_monochrome = np.sum(self.avg_variance, axis=2)  # Add variances for RGB
+            avg_variance_monochrome = (255 * avg_variance_monochrome / avg_variance_monochrome.max()).astype('uint8')
+
+            _, mask = cv2.threshold(avg_variance_monochrome, thresh=5, maxval=255, type=cv2.THRESH_BINARY)
+            masked = cv2.bitwise_and(opencv_frame_left, opencv_frame_left, mask=mask)
+            img_drawn = self.find_dark_edges_or_subtitles(masked, opencv_frame_left)
+
+            self.img_right = self.update_canvas_with_frame(
+                self.right_canvas, self.right_image_on_canvas, img_drawn)
 
             # self.update_canvas_with_frame(self.right_canvas, self.right_image_on_canvas, opencv_frame_right)
             # self.img_right = self.prepare_to_present_image(opencv_frame_right)
             # self.right_canvas.create_image(0, 0, image=self.img_right, anchor=NW)
+            return True
 
         except Exception as exception:
             print(exception)
@@ -334,15 +423,17 @@ class Player:
 
     def move_video_right(self, event):
         if self.frame_no < self.length_frame:
-            self.frame_no += self.frame_p
-            self.scale.config(value=self.frame_no)
-            self.run_video(self.frame_no)
+            frame_no = self.frame_no + self.frame_p
+            self.scale.config(value=frame_no)
+            if self.run_video(frame_no):
+                self.frame_no = frame_no
 
     def move_video_left(self, event):
         if self.frame_no > 1:
-            self.frame_no -= self.frame_p
-            self.scale.config(value=self.frame_no)
-            self.run_video(self.frame_no)
+            frame_no = self.frame_no - self.frame_p
+            self.scale.config(value=frame_no)
+            if self.run_video(frame_no):  # Managed to read and display the frame
+                self.frame_no = frame_no
 
     def start_trim(self):
         self.params_dic['ss'] = self.to_time(self.scale.get())
@@ -388,4 +479,5 @@ class Player:
 
         self.scale.config(to=self.length_frame, value=0)
         self.scale.config(state='NORMAL')
+        self.avg_variance = self.calc_std_per_pixel(self.video, self.length_frame)
         self.run_video(0)
