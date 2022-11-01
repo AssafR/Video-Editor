@@ -16,6 +16,13 @@ DEFAULT_WIDTH = 560
 THRESHOLD = 5
 
 
+def show(img, normalize=False, window=False):
+    img_display = 255 * img / img.max() if normalize else img
+    img_display = img_display[70:140, 1400:, :] if window else img_display
+    cv2.imshow('image', (img_display.astype('uint8')));
+    cv2.waitKey(0)
+
+
 class Player:
     frame_list = [
         0,
@@ -269,10 +276,12 @@ class Player:
         return left_margin, right_margin
 
     def find_dark_edges_or_subtitles(self, img_search, img_draw):
+
         img_gray = cv2.cvtColor(img_search, cv2.COLOR_RGB2GRAY)
 
-        pct = np.percentile(img_gray, [5, 50, 95, 100], axis=1)
-        res = (pct[0] < 10) & ((pct[1] < 10) | (pct[1] < 20) | (pct[2] < 20) | (pct[2] > 150))
+        pct = np.percentile(img_gray, [5, 50, 99, 100], axis=1)
+        # res = (pct[0] < 10) & ((pct[1] < 10) | (pct[1] < 20) | (pct[2] < 20) | (pct[2] > 150))
+        res = (pct[3] < 20) | ((pct[2] < 20) & (pct[3] > 150))
         lines_numbers = [x[0] for x in np.argwhere(res)]
         height, width = img_gray.shape  # e.g: (1080, 1920)
 
@@ -294,39 +303,47 @@ class Player:
     def calc_std_per_pixel(self, video, length_frame):
         sum_frames = None
         sum_variance = None
-        frame_step = 150
+        frame_step = 100
+        GAUSSIAN_SIZE = 49
 
         num_frames = 0
         for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
-            video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
-            ret, frame = self.video.read()  # Read the frame
+            ret, frame = self.read_frame_from_vid(video, frame_no)
+            frame = cv2.GaussianBlur(frame, (GAUSSIAN_SIZE, GAUSSIAN_SIZE), 0)
             if not ret:
                 self.length_frame = frame_no - 1
                 break
             if sum_frames is None:
-                sum_frames = np.zeros_like(frame).astype('float64')
-            self.label.config(text=self.to_time(frame_no))  # Update the label
-            num_frames = num_frames + 1
+                sum_frames = np.zeros_like(frame).astype('int64')
             sum_frames = sum_frames + frame
-        self.avg_frame = (sum_frames / num_frames)
+            num_frames = num_frames + 1
+            self.label.config(text=self.to_time(frame_no))  # Update the label
+        self.avg_frame = (sum_frames / num_frames).astype('int64')
 
         num_frames = 0
         for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
-            video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
-            ret, frame = self.video.read()  # Read the frame
+            ret, frame = self.read_frame_from_vid(video, frame_no)
+            frame = cv2.GaussianBlur(frame, (GAUSSIAN_SIZE, GAUSSIAN_SIZE), 0)
             if not ret:
                 self.length_frame = frame_no - 1
                 break
             if sum_variance is None:
-                sum_variance = np.zeros_like(frame).astype('float64')
-            self.label.config(text=self.to_time(frame_no))  # Update the label
-            num_frames = num_frames + 1
-            diff_from_avg = (frame - self.avg_frame)
-            diff_from_avg = diff_from_avg ** 2
+                sum_variance = np.zeros_like(frame).astype('int64')
+            diff_from_avg = (frame.astype('int64') - self.avg_frame.astype('int64'))
+            diff_from_avg = np.absolute(diff_from_avg)  # diff_from_avg ** 2
             sum_variance = sum_variance + diff_from_avg
-        self.avg_variance = (sum_variance / num_frames)
+
+            num_frames = num_frames + 1
+            self.label.config(text=self.to_time(frame_no))  # Update the label
+        self.avg_variance = (sum_variance / num_frames) # Created as float64
 
         return self.avg_variance
+
+    def read_frame_from_vid(self, video, frame_no):
+        video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
+        ret, frame = self.video.read()  # Read the frame
+        # frame = frame[70:140, 1400:, :]
+        return ret, frame
 
     def calculate_crop_img(self, img):
         axes = {'COLUMNS': 0, 'ROWS': 1}
@@ -362,9 +379,7 @@ class Player:
 
         try:
             self.label.config(text=self.to_time(frame_number))  # Update the label
-            self.video.set(cv2.CAP_PROP_POS_FRAMES,
-                           frame_number)  # 0-based index of the frame to be decoded/captured next.
-            ret, self.frame = self.video.read()  # Read the frame
+            ret, self.frame = self.read_frame_from_vid(self.video, frame_number)
             if not ret:
                 return False
             opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
@@ -385,11 +400,11 @@ class Player:
             # avg_frame = self.avg_frame.astype('uint8')
             # opencv_frame_right = self.process_image_flip(self.process_image_flip(avg_frame)).astype('uint8')
             # np.sum(self.avg_variance,axis=2).shape
-            avg_variance_monochrome = np.sum(self.avg_variance, axis=2)  # Add variances for RGB
-            avg_variance_monochrome = (255 * avg_variance_monochrome / avg_variance_monochrome.max()).astype('uint8')
+            avg_variance_monochrome = np.sum(self.avg_variance, axis=2)/3  # Add variances for RGB
+            # avg_variance_monochrome = (255 * avg_variance_monochrome / avg_variance_monochrome.max()).astype('uint8')
 
-            _, mask = cv2.threshold(avg_variance_monochrome, thresh=5, maxval=255, type=cv2.THRESH_BINARY)
-            masked = cv2.bitwise_and(opencv_frame_left, opencv_frame_left, mask=mask)
+            _, mask = cv2.threshold(avg_variance_monochrome, thresh=10, maxval=200, type=cv2.THRESH_BINARY)
+            masked = cv2.bitwise_and(opencv_frame_left, opencv_frame_left, mask=mask.astype('uint8'))
             img_drawn = self.find_dark_edges_or_subtitles(masked, opencv_frame_left)
 
             self.img_right = self.update_canvas_with_frame(
