@@ -1,8 +1,9 @@
 import numpy as np
-from tkinter import ttk, Tk, Canvas
+from tkinter import ttk, Tk, Canvas, DISABLED
 
-RECTANGLE_OFFSET = 10
-WORLD_WIDTH = 25
+RECTANGLE_OFFSET = 20
+RECTANGLE_SPACE = 4
+WORLD_WIDTH = 30
 WORLD_HEIGHT = 20
 DEFAULT_RECTANGLE_SIZE = 20
 
@@ -22,8 +23,8 @@ class Board:
 
     def board_main(self):
         self.canvas = Canvas(self.root,  # Canvas on which the grid will be displayed
-                             width=WORLD_WIDTH * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET,
-                             height=WORLD_HEIGHT * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET,
+                             width=WORLD_WIDTH * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET - 2,
+                             height=WORLD_HEIGHT * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET - 2,
                              bg='red')
         self.canvas.pack()
         self.btn_next_round = ttk.Button(self.root, text='Next Round', command=self.next_round, state='enabled')
@@ -47,11 +48,16 @@ class Board:
                     fill_color = '#000fff000'  # Green
                 else:
                     fill_color = '#000000000'  # Black
-                self.canvas.create_rectangle(RECTANGLE_OFFSET + i * DEFAULT_RECTANGLE_SIZE,
-                                             RECTANGLE_OFFSET + j * DEFAULT_RECTANGLE_SIZE,
-                                             RECTANGLE_OFFSET + (i + 1) * DEFAULT_RECTANGLE_SIZE - 1,
-                                             RECTANGLE_OFFSET + (j + 1) * DEFAULT_RECTANGLE_SIZE + -1,
-                                             fill=fill_color)
+                self.canvas.create_rectangle(
+                    RECTANGLE_OFFSET + RECTANGLE_SPACE + i * DEFAULT_RECTANGLE_SIZE,
+                    RECTANGLE_OFFSET + RECTANGLE_SPACE + j * DEFAULT_RECTANGLE_SIZE,
+                    RECTANGLE_OFFSET + RECTANGLE_SPACE + (
+                            i + 1) * DEFAULT_RECTANGLE_SIZE - RECTANGLE_SPACE,
+                    RECTANGLE_OFFSET + RECTANGLE_SPACE + (
+                            j + 1) * DEFAULT_RECTANGLE_SIZE - RECTANGLE_SPACE,
+                    fill=fill_color,
+                    outline=fill_color
+                )
 
 
 if __name__ == '__main__':
