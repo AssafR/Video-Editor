@@ -1,15 +1,15 @@
 import numpy as np
 from tkinter import ttk, Tk, Canvas, DISABLED
 
-RECTANGLE_OFFSET = 20
-RECTANGLE_SPACE = 4
+BOX_OFFSET = 20
 WORLD_WIDTH = 30
 WORLD_HEIGHT = 20
 DEFAULT_RECTANGLE_SIZE = 20
+BOX_SPACE = 2
 
 
 def random_world(width, height):
-    # Create a random world of width and height consisting of 0/1 in equal probability
+    # Create a random world of width and height consisting of random {0,1} drawn in equal probability
     world = ((0.5 + np.random.rand(width, height)).astype('int8'))
     return world
 
@@ -23,8 +23,8 @@ class Board:
 
     def board_main(self):
         self.canvas = Canvas(self.root,  # Canvas on which the grid will be displayed
-                             width=WORLD_WIDTH * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET - 2,
-                             height=WORLD_HEIGHT * DEFAULT_RECTANGLE_SIZE + 2 * RECTANGLE_OFFSET - 2,
+                             width=WORLD_WIDTH * DEFAULT_RECTANGLE_SIZE + 2 * BOX_OFFSET - 2,
+                             height=WORLD_HEIGHT * DEFAULT_RECTANGLE_SIZE + 2 * BOX_OFFSET - 2,
                              bg='red')
         self.canvas.pack()
         self.btn_next_round = ttk.Button(self.root, text='Next Round', command=self.next_round, state='enabled')
@@ -49,12 +49,10 @@ class Board:
                 else:
                     fill_color = '#000000000'  # Black
                 self.canvas.create_rectangle(
-                    RECTANGLE_OFFSET + RECTANGLE_SPACE + i * DEFAULT_RECTANGLE_SIZE,
-                    RECTANGLE_OFFSET + RECTANGLE_SPACE + j * DEFAULT_RECTANGLE_SIZE,
-                    RECTANGLE_OFFSET + RECTANGLE_SPACE + (
-                            i + 1) * DEFAULT_RECTANGLE_SIZE - RECTANGLE_SPACE,
-                    RECTANGLE_OFFSET + RECTANGLE_SPACE + (
-                            j + 1) * DEFAULT_RECTANGLE_SIZE - RECTANGLE_SPACE,
+                    BOX_OFFSET + BOX_SPACE + i * DEFAULT_RECTANGLE_SIZE,
+                    BOX_OFFSET + BOX_SPACE + j * DEFAULT_RECTANGLE_SIZE,
+                    BOX_OFFSET + BOX_SPACE + (i + 1) * DEFAULT_RECTANGLE_SIZE - BOX_SPACE,
+                    BOX_OFFSET + BOX_SPACE + (j + 1) * DEFAULT_RECTANGLE_SIZE - BOX_SPACE,
                     fill=fill_color,
                     outline=fill_color
                 )
