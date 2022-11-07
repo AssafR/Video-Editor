@@ -3,6 +3,8 @@ import datetime
 import os
 import ffmpeg
 import tkinter.ttk as ttk
+import utils
+from utils import mask_frame_by_variance, find_dark_lines
 
 from tkinter import *
 from PIL import ImageTk, Image
@@ -14,13 +16,6 @@ DEFAULT_HEIGHT = 400
 DEFAULT_WIDTH = 560
 
 THRESHOLD = 5
-
-
-def show(img, normalize=False, window=False):
-    img_display = 255 * img / img.max() if normalize else img
-    img_display = img_display[70:140, 1400:, :] if window else img_display
-    cv2.imshow('image', (img_display.astype('uint8')));
-    cv2.waitKey(0)
 
 
 class Player:
@@ -60,6 +55,10 @@ class Player:
     ]
 
     def __init__(self):
+        self.first_row_final = None
+        self.last_row_final = None
+        self.first_col_final = None
+        self.last_col_final = None
         self.frame = None
         self.frame_no = None
         self.scale = None
@@ -277,20 +276,42 @@ class Player:
 
     def find_dark_edges_or_subtitles(self, img_search, img_draw):
 
-        img_gray = cv2.cvtColor(img_search, cv2.COLOR_RGB2GRAY)
-
-        pct = np.percentile(img_gray, [5, 50, 99, 100], axis=1)
-        # res = (pct[0] < 10) & ((pct[1] < 10) | (pct[1] < 20) | (pct[2] < 20) | (pct[2] > 150))
-        res = (pct[3] < 20) | ((pct[2] < 20) & (pct[3] > 150))
-        lines_numbers = [x[0] for x in np.argwhere(res)]
-        height, width = img_gray.shape  # e.g: (1080, 1920)
+        # img_gray = cv2.cvtColor(img_search, cv2.COLOR_RGB2GRAY)
+        height, width, _ = img_search.shape  # e.g: (1080, 1920)
+        #
+        # first_row, last_row = find_dark_lines(img_gray, utils.axes['ROWS'])
+        # first_col, last_col = find_dark_lines(img_gray, utils.axes['COLUMNS'])
 
         img_return = img_draw
-        for line in lines_numbers:
-            # points.append([0, line])
-            # points.append([width,line])
-            img_return = cv2.line(img_return, (0, line), (width - 1, line), (0, 255, 0), thickness=1)
+        if self.first_row_final > -1 and self.last_row_final > -1:
+            img_return = cv2.rectangle(img_return,
+                                       (0, 0), (width - 1, self.first_row_final - 1), (0, 255, 0), thickness=-1)
+            img_return = cv2.rectangle(img_return,
+                                       (0, self.last_row_final + 1), (width - 1, height - 1), (0, 255, 0),thickness=-1)
+        else:
+            self.first_row_final = 0
+            self.last_row_final = height - 1
 
+        if self.first_col_final > -1 and self.last_col_final > -1:
+            img_return = cv2.rectangle(img_return,
+                                       (0, 0), (self.first_col_final - 1, height - 1), (0, 255, 0), thickness=-1)
+            img_return = cv2.rectangle(img_return,
+                                       (self.last_col_final + 1, 0), (width - 1, height - 1), (0, 255, 0),  thickness=-1)
+        else:
+            self.first_col_final = 0
+            self.last_col_final = width - 1
+
+        img_return = img_return[
+                     self.first_row_final:self.last_row_final,
+                     self.first_col_final:self.last_col_final,
+                     :]
+
+        # for row_number in rows_numbers:
+        #     img_return = cv2.line(img_return, (0, row_number), (width - 1, row_number), (0, 255, 0), thickness=1)
+
+        # columns_numbers = self.find_dark_lines(img_gray, utils.axes['COLUMNS'])
+        # for column_number in columns_numbers:
+        #     img_return = cv2.line(img_return, (column_number,0), (column_number, height-1), (0, 255, 0), thickness=1)
         # points = np.array(points, np.int32).reshape((-1, 1, 2))
         #
         # color = (0, 255, 0)
@@ -300,57 +321,11 @@ class Player:
 
         return img_return  # img_search #
 
-    def calc_std_per_pixel(self, video, length_frame):
-        sum_frames = None
-        sum_variance = None
-        frame_step = 100
-        GAUSSIAN_SIZE = 49
-
-        num_frames = 0
-        for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
-            ret, frame = self.read_frame_from_vid(video, frame_no)
-            frame = cv2.GaussianBlur(frame, (GAUSSIAN_SIZE, GAUSSIAN_SIZE), 0)
-            if not ret:
-                self.length_frame = frame_no - 1
-                break
-            if sum_frames is None:
-                sum_frames = np.zeros_like(frame).astype('int64')
-            sum_frames = sum_frames + frame
-            num_frames = num_frames + 1
-            self.label.config(text=self.to_time(frame_no))  # Update the label
-        self.avg_frame = (sum_frames / num_frames).astype('int64')
-
-        num_frames = 0
-        for frame_no in range(int(length_frame / 10), int(length_frame), frame_step):
-            ret, frame = self.read_frame_from_vid(video, frame_no)
-            frame = cv2.GaussianBlur(frame, (GAUSSIAN_SIZE, GAUSSIAN_SIZE), 0)
-            if not ret:
-                self.length_frame = frame_no - 1
-                break
-            if sum_variance is None:
-                sum_variance = np.zeros_like(frame).astype('int64')
-            diff_from_avg = (frame.astype('int64') - self.avg_frame.astype('int64'))
-            diff_from_avg = np.absolute(diff_from_avg)  # diff_from_avg ** 2
-            sum_variance = sum_variance + diff_from_avg
-
-            num_frames = num_frames + 1
-            self.label.config(text=self.to_time(frame_no))  # Update the label
-        self.avg_variance = (sum_variance / num_frames) # Created as float64
-
-        return self.avg_variance
-
-    def read_frame_from_vid(self, video, frame_no):
-        video.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # 0-based index of the frame to be decoded/captured next.
-        ret, frame = self.video.read()  # Read the frame
-        # frame = frame[70:140, 1400:, :]
-        return ret, frame
-
     def calculate_crop_img(self, img):
-        axes = {'COLUMNS': 0, 'ROWS': 1}
 
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        left_margin, right_margin = self.find_dark_edges(img_gray, axes['COLUMNS'])
-        top_margin, bottom_margin = self.find_dark_edges(img_gray, axes['ROWS'])
+        left_margin, right_margin = self.find_dark_edges(img_gray, utils.axes['COLUMNS'])
+        top_margin, bottom_margin = self.find_dark_edges(img_gray, utils.axes['ROWS'])
         return left_margin, right_margin, top_margin, bottom_margin
 
     def process_image_old(self, img):
@@ -379,7 +354,7 @@ class Player:
 
         try:
             self.label.config(text=self.to_time(frame_number))  # Update the label
-            ret, self.frame = self.read_frame_from_vid(self.video, frame_number)
+            ret, self.frame = utils.read_frame_from_vid(self.video, frame_number)
             if not ret:
                 return False
             opencv_frame_left = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
@@ -400,11 +375,11 @@ class Player:
             # avg_frame = self.avg_frame.astype('uint8')
             # opencv_frame_right = self.process_image_flip(self.process_image_flip(avg_frame)).astype('uint8')
             # np.sum(self.avg_variance,axis=2).shape
-            avg_variance_monochrome = np.sum(self.avg_variance, axis=2)/3  # Add variances for RGB
             # avg_variance_monochrome = (255 * avg_variance_monochrome / avg_variance_monochrome.max()).astype('uint8')
 
-            _, mask = cv2.threshold(avg_variance_monochrome, thresh=10, maxval=200, type=cv2.THRESH_BINARY)
-            masked = cv2.bitwise_and(opencv_frame_left, opencv_frame_left, mask=mask.astype('uint8'))
+            # The mask identified areas of very little change across the video and blacks them.
+            avg_variance = self.avg_variance
+            masked = mask_frame_by_variance(avg_variance, opencv_frame_left)
             img_drawn = self.find_dark_edges_or_subtitles(masked, opencv_frame_left)
 
             self.img_right = self.update_canvas_with_frame(
@@ -494,5 +469,9 @@ class Player:
 
         self.scale.config(to=self.length_frame, value=0)
         self.scale.config(state='NORMAL')
-        self.avg_variance = self.calc_std_per_pixel(self.video, self.length_frame)
-        self.run_video(0)
+        self.avg_frame, self.avg_variance = utils.calc_std_per_pixel(self.root.file_name)
+        self.first_row_final, self.last_row_final, self.first_col_final, self.last_col_final = \
+            utils.find_dark_edges_globally(self.root.file_name)
+
+        self.frame_no = 1500
+        self.run_video(self.frame_no)
