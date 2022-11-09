@@ -79,7 +79,7 @@ def find_dark_edges_globally(video_file_name):
     first_col_final = int(np.median(first_col_lst))
     last_col_final = int(np.median(last_col_lst))
 
-    return first_row_final, last_row_final, first_col_final,last_col_final
+    return first_row_final, last_row_final, first_col_final, last_col_final
 
 
 def show(img, normalize=False, window=False):
@@ -112,16 +112,19 @@ def find_longest_gap(seq):
     if longest_position > -1:
         return seq[longest_position] + 1, seq[longest_position + 1] - 1
     else:
-        return 0,max(seq)
+        return 1, 1
 
 
 def find_dark_lines(greyscale_image, axis):
-    pct = np.percentile(greyscale_image, [5, 50, 99, 100], axis=axis)
-    # res = (pct[0] < 10) & ((pct[1] < 10) | (pct[1] < 20) | (pct[2] < 20) | (pct[2] > 150))
-    res = (pct[3] < 20) | (
-            (pct[2] < 20) & (pct[3] > 150))  # Most of the pixels in line are very dark or very bright
+    percentiles = np.percentile(greyscale_image, [5, 50, 99, 100], axis=axis)
+    # res = (percentiles[0] < 10) & ((percentiles[1] < 10) | (percentiles[1] < 20) | (percentiles[2] < 20) | (percentiles[2] > 150))
+    res = (percentiles[3] < 20) | (
+            (percentiles[2] < 20) & (percentiles[3] > 150))  # Most of the pixels in line are very dark or very bright
     lines_numbers = sorted([x[0] for x in np.argwhere(res)])
-    return find_longest_gap(lines_numbers)
+    if len(lines_numbers) == 0:
+        return 0, len(res)
+    else:
+        return find_longest_gap(lines_numbers)
 
 # if __name__ == '__main__':
 #     arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
