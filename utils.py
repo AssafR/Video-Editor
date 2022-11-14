@@ -77,9 +77,9 @@ def find_dark_edges_globally(video_file_name):
     img_percentiles = np.around(img_percentiles).astype(int)
 
     # first_row_final, last_row_final, first_col_final, last_col_final =
+    final_result = img_percentiles[4] # first_row_final, last_row_final, first_col_final, last_col_final
 
-    return img_percentiles[4] # first_row_final, last_row_final, first_col_final, last_col_final
-
+    return final_result[2:4], final_result[0:2]
 
 def show(img, normalize=False, window=False):
     img_display = 255 * img / img.max() if normalize else img
