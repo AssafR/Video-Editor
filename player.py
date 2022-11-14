@@ -481,16 +481,17 @@ class Player:
         self.scale.config(state='NORMAL')
         self.avg_frame, self.avg_variance = utils.calc_std_per_pixel(self.root.file_name)
 
-        cropping_values_x, cropping_values_y = utils.find_dark_edges_globally(self.root.file_name)
-        self.first_row_final, self.last_row_final = cropping_values_y
-        self.first_col_final, self.last_col_final = cropping_values_x
-
+        self.cropping_values_x, self.cropping_values_y = utils.find_dark_edges_globally(self.root.file_name)
         self.crop_label.config(
-            text=f'{self.first_col_final}-{self.last_col_final} , {self.first_row_final}-{self.last_row_final}')
-        resolution_x = self.last_col_final - self.first_col_final + 1
-        resolution_y = self.last_row_final - self.first_row_final + 1
+            text=f'{self.cropping_values_x[0]}:{self.cropping_values_x[1]} , {self.cropping_values_y[0]}:{self.cropping_values_y[1]}')
+        resolution_x = self.cropping_values_x[1] - self.cropping_values_x[0] + 1
+        resolution_y = self.cropping_values_y[1] - self.cropping_values_y[0] + 1
         res_str = f'{resolution_x}x{resolution_y}'
         self.resolution_label.config(text=res_str)
+
+        self.first_col_final, self.last_col_final = self.cropping_values_x
+        self.first_row_final, self.last_row_final = self.cropping_values_y
+
 
         self.frame_no = 1500 # Temporary
         self.run_video(self.frame_no)
