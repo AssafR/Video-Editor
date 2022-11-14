@@ -94,7 +94,9 @@ class Player:
         self.btn_start_trim = None
         self.btn_end_trim = None
         self.btn_convert = None
-        self.label = None
+        self.time_label = None
+        self.crop_label = None
+        self.resolution_label = None
 
     def update_value(self):
         self.scale.config(value=self.frame_no)
@@ -104,7 +106,7 @@ class Player:
         self.frame_no = self.scale.get()
         if int(self.frame_no) != self.frame_no:
             self.frame_no = round(self.frame_no)
-        self.label.config(text=self.to_time(self.frame_no))
+        self.time_label.config(text=self.to_time(self.frame_no))
         self.run_video(self.frame_no)
 
     def design_window(self, title, geo, ico):
@@ -133,7 +135,11 @@ class Player:
         self.right_canvas.place(x=760, y=10)
 
         frame1 = ttk.LabelFrame(self.root, text='Frame Pos')
-        frame1.place(x=100, y=420)
+        frame1.place(x=50, y=420)
+        frame2 = ttk.LabelFrame(self.root, text='Cropping')
+        frame2.place(x=150, y=420)
+        frame3 = ttk.LabelFrame(self.root, text='Resolution')
+        frame3.place(x=300, y=420)
 
         # Defining a Scale (i.e. Slider widget in this case).
         self.scale = ttk.Scale(self.root, from_=0,
@@ -165,8 +171,12 @@ class Player:
         # video_name is the video being called
         self.frame_no = 0
         frame_no_as_time_str = self.to_time(self.frame_no)
-        self.label = Label(frame1, text=frame_no_as_time_str, bg='yellow')
-        self.label.pack()
+        self.time_label = Label(frame1, text=frame_no_as_time_str, bg='yellow')
+        self.time_label.pack()
+        self.crop_label = Label(frame2, text='', bg='yellow')
+        self.crop_label.pack()
+        self.resolution_label = Label(frame3, text='', bg='yellow')
+        self.resolution_label.pack()
 
         self.frame_p = 1
         # Put all these menu selectors in place, 3 on top row and change_audio in bottom row.
@@ -287,7 +297,7 @@ class Player:
             img_return = cv2.rectangle(img_return,
                                        (0, 0), (width - 1, self.first_row_final - 1), (0, 255, 0), thickness=-1)
             img_return = cv2.rectangle(img_return,
-                                       (0, self.last_row_final + 1), (width - 1, height - 1), (0, 255, 0),thickness=-1)
+                                       (0, self.last_row_final + 1), (width - 1, height - 1), (0, 255, 0), thickness=-1)
         else:
             self.first_row_final = 0
             self.last_row_final = height - 1
@@ -296,7 +306,7 @@ class Player:
             img_return = cv2.rectangle(img_return,
                                        (0, 0), (self.first_col_final - 1, height - 1), (0, 255, 0), thickness=-1)
             img_return = cv2.rectangle(img_return,
-                                       (self.last_col_final + 1, 0), (width - 1, height - 1), (0, 255, 0),  thickness=-1)
+                                       (self.last_col_final + 1, 0), (width - 1, height - 1), (0, 255, 0), thickness=-1)
         else:
             self.first_col_final = 0
             self.last_col_final = width - 1
@@ -353,7 +363,7 @@ class Player:
         #                                                avg_frame)
 
         try:
-            self.label.config(text=self.to_time(frame_number))  # Update the label
+            self.time_label.config(text=self.to_time(frame_number))  # Update the label
             ret, self.frame = utils.read_frame_from_vid(self.video, frame_number)
             if not ret:
                 return False
@@ -470,8 +480,16 @@ class Player:
         self.scale.config(to=self.length_frame, value=0)
         self.scale.config(state='NORMAL')
         self.avg_frame, self.avg_variance = utils.calc_std_per_pixel(self.root.file_name)
-        self.first_row_final, self.last_row_final, self.first_col_final, self.last_col_final = \
-            utils.find_dark_edges_globally(self.root.file_name)
+
+        cropping_values = utils.find_dark_edges_globally(self.root.file_name)
+        self.first_row_final, self.last_row_final, self.first_col_final, self.last_col_final = cropping_values
+        self.crop_label.config(
+            text=f'{self.first_col_final}-{self.last_col_final} , {self.first_row_final}-{self.last_row_final}')
+        resolution_x = self.last_col_final - self.first_col_final + 1
+        resolution_y = self.last_row_final - self.first_row_final + 1
+        res_str = f'{resolution_x}x{resolution_y}'
+        print(res_str)
+        self.resolution_label.config(text=res_str)
 
         self.frame_no = 1500
         self.run_video(self.frame_no)

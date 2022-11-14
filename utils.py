@@ -71,21 +71,20 @@ def find_dark_edges_globally(video_file_name):
         first_col_lst.append(first_col)
         last_col_lst.append(last_col)
 
-        img_statistics = np.matrix([first_row_lst, last_row_lst, first_col_lst, last_col_lst]);
-        img_percentiles = np.percentile(img_statistics, [5, 50, 95], axis=1).astype(int)
+    # The first and last (line/column) which host the largest rectangle, in each of frame_no frames.
+    img_statistics = list([first_row_lst, last_row_lst, first_col_lst, last_col_lst]);
+    img_percentiles = np.percentile(img_statistics, [5, 20, 30, 50, 80, 95], axis=1)
+    img_percentiles = np.around(img_percentiles).astype(int)
 
-    first_row_final = int(np.median(first_row_lst))
-    last_row_final = int(np.median(last_row_lst))
-    first_col_final = int(np.median(first_col_lst))
-    last_col_final = int(np.median(last_col_lst))
+    # first_row_final, last_row_final, first_col_final, last_col_final =
 
-    return first_row_final, last_row_final, first_col_final, last_col_final
+    return img_percentiles[4] # first_row_final, last_row_final, first_col_final, last_col_final
 
 
 def show(img, normalize=False, window=False):
     img_display = 255 * img / img.max() if normalize else img
     img_display = img_display[70:140, 1400:, :] if window else img_display
-    cv2.imshow('image', (img_display.astype('uint8')));
+    cv2.imshow('image', (img_display.astype('uint8')))
     cv2.waitKey(0)
 
 
@@ -101,7 +100,8 @@ def mask_frame_by_variance(avg_variance, opencv_frame_left):
 
 
 def find_longest_gap(seq):
-    # Returns the beginning and end values of the longest gap
+    # Input is a sorted array of numbers (representing rows or columns).
+    # Returns the beginning and end positions of the longest gap in the series
     longest_position = -1
     longest_gap = -1
     for pos, val in enumerate(seq[:-1]):
@@ -112,7 +112,7 @@ def find_longest_gap(seq):
     if longest_position > -1:
         return seq[longest_position] + 1, seq[longest_position + 1] - 1
     else:
-        return 1, 1
+        return 0, max(seq)
 
 
 def find_dark_lines(greyscale_image, axis):
@@ -120,9 +120,11 @@ def find_dark_lines(greyscale_image, axis):
     # res = (percentiles[0] < 10) & ((percentiles[1] < 10) | (percentiles[1] < 20) | (percentiles[2] < 20) | (percentiles[2] > 150))
     res = (percentiles[3] < 20) | (
             (percentiles[2] < 20) & (percentiles[3] > 150))  # Most of the pixels in line are very dark or very bright
+    # Value is true in positions where possibly
+
     lines_numbers = sorted([x[0] for x in np.argwhere(res)])
     if len(lines_numbers) == 0:
-        return 0, len(res)
+        return 0, len(res) - 1
     else:
         return find_longest_gap(lines_numbers)
 
