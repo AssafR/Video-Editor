@@ -28,14 +28,17 @@ for cnt in cnts:
     area = cv2.contourArea(cnt)
     if area < 30000:
         continue
+    vertices = cv2.approxPolyDP(cnt, 0.01 * cv2.arcLength(cnt, True), True)
+    num_vertices = len(vertices)
+    if num_vertices !=4:
+        continue
     cnts_filtered.append(cnt)
-    num_vtx = cv2.approxPolyDP(cnt, 0.01 * cv2.arcLength(cnt, True), True)
-    print(f'vertices: {len(num_vtx)} , area: {area}')
+    print(f'vertices: {num_vertices} , area: {area}')
     rect = cv2.minAreaRect(cnt)
     box = cv2.boxPoints(rect)
-    print(rect)
-    box = np.int0(box)
-    cv2.drawContours(img, [box], 0, (0, 0, 255), 2) # Draw rectangle in red
+    print(box)
+    box = np.intp(box)
+    cv2.drawContours(img, [box], 0, (0, 0, 255)) # Draw rectangle in red
 
 cv2.drawContours(img, cnts_filtered, -1, (0, 255, 0), 3) # Draw original contour in green
 
