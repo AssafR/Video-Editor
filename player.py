@@ -293,23 +293,17 @@ class Player:
         # first_col, last_col = find_dark_lines(img_gray, utils.axes['COLUMNS'])
 
         img_return = img_draw
-        if self.first_row_final > -1 and self.last_row_final > -1:
-            img_return = cv2.rectangle(img_return,
-                                       (0, 0), (width - 1, self.first_row_final - 1), (0, 255, 0), thickness=-1)
-            img_return = cv2.rectangle(img_return,
-                                       (0, self.last_row_final + 1), (width - 1, height - 1), (0, 255, 0), thickness=-1)
-        else:
-            self.first_row_final = 0
-            self.last_row_final = height - 1
-
-        if self.first_col_final > -1 and self.last_col_final > -1:
-            img_return = cv2.rectangle(img_return,
-                                       (0, 0), (self.first_col_final - 1, height - 1), (0, 255, 0), thickness=-1)
-            img_return = cv2.rectangle(img_return,
-                                       (self.last_col_final + 1, 0), (width - 1, height - 1), (0, 255, 0), thickness=-1)
-        else:
-            self.first_col_final = 0
-            self.last_col_final = width - 1
+        # if self.first_row_final > -1 and self.last_row_final > -1:
+        #     img_return = cv2.rectangle(img_return,
+        #                                (0, 0), (width - 1, self.first_row_final - 1), (0, 255, 0), thickness=-1)
+        #     img_return = cv2.rectangle(img_return,
+        #                                (0, self.last_row_final + 1), (width - 1, height - 1), (0, 255, 0), thickness=-1)
+        #
+        # if self.first_col_final > -1 and self.last_col_final > -1:
+        #     img_return = cv2.rectangle(img_return,
+        #                                (0, 0), (self.first_col_final - 1, height - 1), (0, 255, 0), thickness=-1)
+        #     img_return = cv2.rectangle(img_return,
+        #                                (self.last_col_final + 1, 0), (width - 1, height - 1), (0, 255, 0), thickness=-1)
 
         img_return = img_return[
                      self.first_row_final:self.last_row_final,
