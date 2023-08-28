@@ -389,7 +389,7 @@ class Player:
 
             # The mask identified areas of very little change across the video and blacks them.
             avg_variance = self.avg_variance
-            masked = mask_frame_by_variance(avg_variance, opencv_frame_left)
+            masked = opencv_frame_left  # mask_frame_by_variance(avg_variance, opencv_frame_left)
             img_drawn = self.find_dark_edges_or_subtitles(masked, opencv_frame_left)
 
             self.img_right = self.update_canvas_with_frame(
@@ -492,6 +492,5 @@ class Player:
         self.first_col_final, self.last_col_final = self.cropping_values_x
         self.first_row_final, self.last_row_final = self.cropping_values_y
 
-
-        self.frame_no = 1500 # Temporary
+        self.frame_no = 1500  # Temporary
         self.run_video(self.frame_no)
