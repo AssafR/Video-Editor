@@ -1,9 +1,12 @@
 import random
+from typing import Any
 
 import cv2
 import numpy
 import numpy as np
 from contextlib import contextmanager
+
+from tqdm import tqdm
 
 axes = {'COLUMNS': 0, 'ROWS': 1}
 GAUSSIAN_SIZE = 15
@@ -14,6 +17,52 @@ def read_frame_from_vid(video, frame_no):
     ret, frame = video.read()  # Read the frame
     # frame = frame[70:140, 1400:, :]
     return ret, frame
+
+
+def get_number_frames(video_file):
+    '''
+    Get the number of frames in a video file
+    Note: This method might be inaccurate if the video file is corrupted or not in a standard format
+    :param video_file: the video file (string)
+    :return: the number of frames in the video file (int)
+    '''
+    with managed_cv2_open_file(video_file) as video:
+        return int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+
+def get_sample_of_frames_from_video_file(
+        video_file: str, min_no_samples: int, probability: float = None,
+        blur_radius: int = None
+) -> dict[int, Any]:
+    """
+     Get a sample of frames from a video file
+    :param probability: (float) The probability of sampling a frame
+    :param video_file:  (str) the video file name
+    :param min_no_samples :  (int) the number of frames to sample (if there is no probability, otherwise ignored)
+    :return:
+    """
+    number_of_frames = get_number_frames(video_file)
+    print(f'Length of video: {number_of_frames}')
+
+    num_samples = min_no_samples
+    if probability is not None:
+        num_samples = max(int(probability * number_of_frames), num_samples)
+    print(f'Number of samples: {num_samples}')
+
+    with managed_cv2_open_file(video_file) as video:
+        frame_sample = {}
+        frames_to_pick = sorted(np.random.choice(number_of_frames, num_samples, replace=False))
+        print(f'Random sample length: {len(frames_to_pick)}')
+        print(f'Random sample: {frames_to_pick}')
+
+        for frame_no in tqdm(frames_to_pick):
+            ret, frame = read_frame_from_vid(video, frame_no)
+            if not ret:
+                break
+            if blur_radius:
+                frame = cv2.GaussianBlur(frame, (blur_radius, blur_radius), 0)
+            frame_sample[frame_no] = frame
+        return frame_sample
 
 
 @contextmanager
@@ -62,7 +111,8 @@ def frame_stream_sample_reader(video_file, blur_radius=None, sample_size=200):
         for frame in reservoir:
             if frame is not None:
                 if blur_radius:
-                    frame = cv2.GaussianBlur(frame, (blur_radius, blur_radius), 0)
+                    # frame = cv2.GaussianBlur(frame, (blur_radius, blur_radius), 0)
+                    frame = cv2.medianBlur(frame, 5)
                 yield frame
 
 
