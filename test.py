@@ -1,5 +1,4 @@
 import numpy as np
-
 from inpaint import inpaint_image
 from utils import *
 
@@ -9,9 +8,6 @@ temp_data_dir = './temp_data'
 # video_file_name = r'Q:\MOVIES\Murder on the Orient Express.mkv'
 # video_file_name = r'S:\TV Shows\פאזל\פאזל עונה 1 - פרק 6 - המקום הקבוע - video Dailymotion.mp4'
 video_file_name = r'Q:\MOVIES\Galaxy Quest_.mkv'
-
-
-# video_file_name = r'Q:\MOVIES\The Matrix.mkv'
 
 
 def mask_for_display(img_mask):

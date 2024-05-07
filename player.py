@@ -3,6 +3,8 @@ import datetime
 import os
 import ffmpeg
 import tkinter.ttk as ttk
+
+import deprecated
 import utils
 from utils import mask_frame_by_variance, find_dark_lines
 
@@ -473,7 +475,7 @@ class Player:
 
         self.scale.config(to=self.length_frame, value=0)
         self.scale.config(state='NORMAL')
-        self.avg_frame, self.avg_variance = utils.calc_std_per_pixel(self.root.file_name)
+        self.avg_frame, self.avg_variance = deprecated.calc_std_per_pixel(self.root.file_name)
 
         self.cropping_values_x, self.cropping_values_y = utils.find_dark_edges_globally(self.root.file_name)
         self.crop_label.config(
