@@ -1,8 +1,9 @@
 import random
+import re
+from pathlib import Path
 from typing import Any
 
 import cv2
-import numpy
 import numpy as np
 from contextlib import contextmanager
 
@@ -20,20 +21,94 @@ def read_frame_from_vid(video, frame_no):
 
 
 def get_number_frames(video_file):
-    '''
+    """
     Get the number of frames in a video file
     Note: This method might be inaccurate if the video file is corrupted or not in a standard format
     :param video_file: the video file (string)
     :return: the number of frames in the video file (int)
-    '''
+    """
     with managed_cv2_open_file(video_file) as video:
         return int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
 
+def save_image(img, filename, img_format='jpg'):
+    """
+    Write image to file, similar to cv2.imwrite but compatible with non-utf names
+    :param img: image
+    :param filename: filename
+    :param img_format: image format (e.g. "jpg")
+    :return:
+    """
+    cv2.imencode(f".{img_format}", img)[1].tofile(filename)
+
+
+def load_image(filename):
+    """
+    Load image from file, similar to cv2.imread but compatible with non-utf names
+    :param filename: filename
+    :return: image
+    """
+    return cv2.imdecode(np.fromfile(filename, np.uint8), cv2.IMREAD_COLOR)
+
+
+def create_new_filename_with_suffix(video_file_name, target_dir, img_format, new_suffix):
+    base_file_name = Path(video_file_name).stem
+    new_stem_filename = f'{base_file_name}__{new_suffix}.{img_format}'
+    new_path = Path(target_dir) / new_stem_filename
+    return str(new_path)
+
+
+def save_sample_of_frames_from_video_file(
+        target_dir: str,
+        video_file_name: str, min_no_samples: int, probability: float = None):
+    """
+    Save a sample of frames from a video file into a directory as images numbered by frame number
+    :param probability:
+    :param min_no_samples:
+    :param target_dir:
+    :param video_file_name:
+    :return:
+    """
+    img_format = 'jpg'
+
+    for frame_no, frame in (
+            get_sample_of_frames_from_video_file(video_file_name, min_no_samples, probability)):
+        new_suffix = f'{frame_no:06d}'
+        new_path = create_new_filename_with_suffix(video_file_name, target_dir, img_format, new_suffix)
+        save_image(frame, str(new_path))
+
+
+def get_sample_of_frames_from_directory_or_video_file(
+        image_cache_dir: str,
+        video_file: str, min_no_samples: int, probability: float = None,
+):
+    """
+    Get a sample of frames from a video file
+    :param image_cache_dir:
+    :param probability: (float) The probability of sampling a frame
+    :param video_file:  (str) the video file name
+    :param min_no_samples :  (int) the number of frames to sample (if there is no probability, otherwise ignored)
+    :return:
+    """
+    frames_from_dir = read_frames_from_directory(image_cache_dir)
+    frames_from_video_file = get_sample_of_frames_from_video_file(video_file, min_no_samples, probability, image_cache_dir)
+    total = 0
+    for frame_no, frame in frames_from_dir:
+        print(f'Frame from directory: {frame_no}')
+        yield frame_no, frame
+        total += 1
+    if total == 0:
+        for frame_no, frame in frames_from_video_file:
+            # print('Frame from video file: {frame_no}')
+            yield frame_no, frame
+            total += 1
+    return total
+
+
 def get_sample_of_frames_from_video_file(
         video_file: str, min_no_samples: int, probability: float = None,
-        blur_radius: int = None
-) -> dict[int, Any]:
+        image_cache_dir:str = None
+) -> Any:
     """
      Get a sample of frames from a video file
     :param probability: (float) The probability of sampling a frame
@@ -50,7 +125,6 @@ def get_sample_of_frames_from_video_file(
     print(f'Number of samples: {num_samples}')
 
     with managed_cv2_open_file(video_file) as video:
-        frame_sample = {}
         frames_to_pick = sorted(np.random.choice(number_of_frames, num_samples, replace=False))
         print(f'Random sample length: {len(frames_to_pick)}')
         print(f'Random sample: {frames_to_pick}')
@@ -59,10 +133,34 @@ def get_sample_of_frames_from_video_file(
             ret, frame = read_frame_from_vid(video, frame_no)
             if not ret:
                 break
-            if blur_radius:
-                frame = cv2.GaussianBlur(frame, (blur_radius, blur_radius), 0)
-            frame_sample[frame_no] = frame
-        return frame_sample
+            if image_cache_dir:
+                new_suffix = f'{frame_no:06d}'
+                new_path = create_new_filename_with_suffix(video_file, image_cache_dir, 'jpg', new_suffix)
+                save_image(frame, str(new_path))
+            yield frame_no, frame
+        return None
+
+
+def read_frames_from_directory(directory, img_format='jpg'):
+    """
+    Read frames from a directory
+    :param directory:
+    :param img_format:
+    :return:
+    """
+
+    img_files = list(sorted(Path(directory).rglob(f'*.{img_format}')))
+    # Create a regular expression to match the file names:
+    regex = re.compile(r'(.*)__(\d+)')
+    for img_file in img_files:
+        if not img_file.is_file():
+            continue
+        match = regex.match(img_file.stem)
+        if not match:
+            continue
+        # Parse the integer frame number from the file name regex pattern
+        frame_no = int(int(match.group(2)))
+        yield frame_no, load_image(str(img_file))
 
 
 @contextmanager
@@ -134,6 +232,61 @@ def calc_std_per_pixel(video_file_name):
     avg_variance = (sum_variance / frame_no)  # Created as float64
 
     return avg_frame, avg_variance
+
+
+def create_mean_std_frames_naive(all_frames):
+    all_frames_expanded = [np.expand_dims(frame, axis=3) for _, frame in all_frames]
+    all_frames_4d = np.concatenate(all_frames_expanded, axis=3)
+    mean_frame = np.mean(all_frames_4d, axis=3)
+    std_frame = np.std(all_frames_4d, axis=3)
+    return mean_frame.astype(np.int8), std_frame / 255.0
+
+
+def create_mean_std_frames_incremental(all_frames, blur_radius: int = None):
+    """
+    Create mean and standard deviation frames incrementally
+    Does not require all frames to be loaded into memory
+
+    Uses an online algorithm for calculating variance, as seen in this example:
+    https://math.stackexchange.com/a/102982
+
+    By calculating the sum of the squares of the values, we can calculate the average and standard deviation incrementally
+    This has the advantage of not requiring all the values to be stored in memory, and can be
+    implemented using lazy-evaluation of the source (e.g. using a generator)
+    Also, since the original values are bytes, the sum of squares will not overflow and the calculation can be
+    done entirely in integer arithmetic up to the last stage requiring division.
+
+    :param blur_radius:
+    :param all_frames: Iterable of frames (must be of the same size)
+    :return: mean_frame as uint8, std_frame as float32 divided by 255
+    """
+    T0 = 0
+    T1 = 0
+    T2 = 0
+
+    for frame_no, frame in all_frames:
+        if blur_radius:
+            frame = cv2.GaussianBlur(frame, (blur_radius, blur_radius), 0)
+        frame64 = frame.astype(np.uint64)
+        if frame_no == 0:
+            T0 = 1
+            T1 = frame64
+            T2 = (frame64 ** 2)
+        else:
+            T0 = T0 + 1
+            T1 = T1 + frame64
+            T2 = T2 + frame64 ** 2
+
+    mean_frame = T1 / T0
+    std_frame = np.sqrt(T0 * T2 - T1 * T1) / T0
+
+    return mean_frame.astype(np.int8), std_frame / 255.0
+
+
+def dilate_image(img, mask=(5, 5), iterations=1):
+    kernel = np.ones(mask, np.uint8)
+    img_dilated = cv2.dilate(img, kernel, iterations)
+    return img_dilated
 
 
 def find_dark_edges_globally(video_file_name):
@@ -209,6 +362,7 @@ def find_dark_lines(greyscale_image, axis):
     else:
         return find_longest_gap(lines_numbers)
 
+
 # if __name__ == '__main__':
 #     arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
 #            30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
@@ -221,3 +375,14 @@ def find_dark_lines(greyscale_image, axis):
 #
 #     beginning, end = find_longest_gap(arr)
 #     print(f'beginning={beginning}, end={end}')
+def opencv_display_image(img, window_name='image'):
+    if img.shape[1]>1280:
+        img = cv2.resize(img, (int(img.shape[1]/2), int(img.shape[0]/2)))
+    cv2.imshow(window_name, img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+def normalize_array(array):
+    array_normalized = (array - np.min(array)) / (np.max(array) - np.min(array))
+    return array_normalized
