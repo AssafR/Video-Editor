@@ -477,7 +477,7 @@ class Player:
         self.scale.config(state='NORMAL')
         self.avg_frame, self.avg_variance = deprecated.calc_std_per_pixel(self.root.file_name)
 
-        self.cropping_values_x, self.cropping_values_y = utils.find_dark_edges_globally(self.root.file_name)
+        self.cropping_values_x, self.cropping_values_y = deprecated.find_dark_edges_globally(self.root.file_name)
         self.crop_label.config(
             text=f'{self.cropping_values_x[0]}:{self.cropping_values_x[1]} , {self.cropping_values_y[0]}:{self.cropping_values_y[1]}')
         resolution_x = self.cropping_values_x[1] - self.cropping_values_x[0] + 1
